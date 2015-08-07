@@ -4,6 +4,7 @@
  */
 package com.gooddata.http.client;
 
+import com.shazam.shazamcrest.matcher.Matchers;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
@@ -20,12 +21,20 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
+import static com.shazam.shazamcrest.matcher.Matchers.sameBeanAs;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.samePropertyValuesAs;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.only;
@@ -148,4 +157,47 @@ public class GoodDataHttpClientTest {
     }
 
 
+    @Test
+    public void shouldRefreshTT() throws Exception {
+        final HttpGet getNoAuth = new HttpGet("/gdc/md");
+        final HttpGet getAuth1 = new HttpGet("/gdc/md");
+        getAuth1.setHeader("X-GDC-AuthTT", "cookieTt");
+        final HttpGet getAuth2 = new HttpGet("/gdc/md");
+        getAuth2.setHeader("X-GDC-AuthTT", "cookieTt2");
+        final HttpGet getToken = new HttpGet("/gdc/account/token");
+        getToken.setHeader("Accept", "application/yaml");
+        getToken.setHeader("X-GDC-AuthSST", "sst");
+
+        final HttpResponse ttRefreshedResponse2 = createResponse(HttpStatus.SC_OK, "---\n  userToken\n    token: cookieTt", "OK");
+
+        when(sstStrategy.obtainSst(any(HttpClient.class), any(HttpHost.class))).thenReturn("sst");
+
+        when(httpClient.execute(any(HttpHost.class), argThat(sameBeanAs(getToken)), any(HttpContext.class)))
+                .thenReturn(ttRefreshedResponse, ttRefreshedResponse2);
+
+        when(httpClient.execute(eq(host), argThat(sameBeanAs(getNoAuth)), any(HttpContext.class)))
+                .thenReturn(ttChallengeResponse);
+        when(httpClient.execute(eq(host), argThat(sameBeanAs(getAuth1)), any(HttpContext.class)))
+                .thenReturn(okResponse, ttChallengeResponse);
+        when(httpClient.execute(eq(host), argThat(sameBeanAs(getAuth2)), any(HttpContext.class)))
+                .thenReturn(okResponse);
+
+        final HttpResponse response = goodDataHttpClient.execute(host, new HttpGet("/gdc/md"));
+        assertEquals(okResponse.getStatusLine().getStatusCode(), response.getStatusLine().getStatusCode());
+
+        final HttpResponse response2 = goodDataHttpClient.execute(host, new HttpGet("/gdc/md"));
+        assertEquals(okResponse.getStatusLine().getStatusCode(), response2.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void shouldName() throws Exception {
+        when(httpClient.execute(eq(host), eq(get), any(HttpContext.class)))
+                .thenAnswer(new Answer<Object>() {
+                    @Override
+                    public Object answer(final InvocationOnMock invocation) throws Throwable {
+                        TimeUnit.SECONDS.sleep(2);
+                        return okResponse;
+                    }
+                });
+    }
 }

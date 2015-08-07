@@ -133,6 +133,12 @@
             <version>${jadler.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.shazam</groupId>
+            <artifactId>shazamcrest</artifactId>
+            <version>0.8</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
